@@ -7,7 +7,12 @@ export const SupplierStatus = {
 
 export type SupplierStatus = (typeof SupplierStatus)[keyof typeof SupplierStatus];
 
-export type UserRole = "requester" | "approver";
+export const UserRole = {
+  requester: "requester",
+  approver: "approver",
+} as const;
+
+export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
 export interface User {
   id: string;
@@ -42,11 +47,19 @@ export interface CreateSupplierInput {
 /** Incoming create-supplier body. Fields may be missing until validated. */
 export type CreateSupplierPayload = Partial<CreateSupplierInput>;
 
+export interface RejectSupplierInput {
+  reason: string;
+}
+
+/** Incoming reject body. Reason may be missing until validated. */
+export type RejectSupplierPayload = Partial<RejectSupplierInput>;
+
 export const SupplierField = {
   companyName: "Company name",
   vatId: "VAT ID",
   country: "Country",
   contactEmail: "Contact email",
+  rejectionReason: "Rejection reason",
 } as const;
 
 export const ErrorCode = {

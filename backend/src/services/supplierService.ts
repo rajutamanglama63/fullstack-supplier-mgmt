@@ -5,8 +5,10 @@ import {
   ErrorCode,
   SupplierField,
   SupplierStatus,
+  UserRole,
   type CreateSupplierInput,
   type CreateSupplierPayload,
+  type RejectSupplierPayload,
   type Supplier,
   type SupplierRecord,
   type User,
@@ -108,4 +110,100 @@ export async function createSupplier(
 
     throw err;
   }
+}
+
+// Load one supplier by id from the DB. Throws 404 if it does not exist.
+async function getSupplierRecord(id: string): Promise<SupplierRecord> {
+  const supplier = await prisma.supplier.findUnique({ where: { id } });
+
+  if (!supplier) {
+    throw new AppError(ErrorCode.SUPPLIER_NOT_FOUND, `Supplier ${id} was not found.`, 404);
+  }
+
+  return supplier;
+}
+
+// Approve/reject is allowed only if: user is an approver, status is pending, and they are not the creator.
+function assertCanReview(supplier: SupplierRecord, currentUser: User): void {
+  if (currentUser.role !== UserRole.approver) {
+    throw new AppError(
+      ErrorCode.UNAUTHORIZED,
+      "Only an approver can approve or reject a supplier.",
+      403,
+    );
+  }
+
+  if (supplier.status !== SupplierStatus.PENDING_APPROVAL) {
+    throw new AppError(
+      ErrorCode.INVALID_STATUS_TRANSITION,
+      `Supplier ${supplier.id} is ${supplier.status} and cannot be reviewed.`,
+      409,
+    );
+  }
+
+  if (supplier.createdBy === currentUser.id) {
+    throw new AppError(
+      ErrorCode.SELF_APPROVAL_NOT_ALLOWED,
+      "The creator of a supplier cannot approve or reject the same supplier.",
+      409,
+    );
+  }
+}
+
+export async function listSuppliers(): Promise<Supplier[]> {
+  const rows = await prisma.supplier.findMany({
+    orderBy: { createdAt: "desc" },
+  });
+
+  // Prisma returns SupplierRecord[]: createdAt is a Date, optional fields are null.
+  // The API expects Supplier[]: createdAt as an ISO string, optional fields as undefined.
+  // map runs toSupplier on each row (same as looping and pushing the converted object).
+  return rows.map(toSupplier);
+}
+
+export async function getSupplierById(id: string): Promise<Supplier> {
+  const supplier = await getSupplierRecord(id);
+  return toSupplier(supplier);
+}
+
+export async function approveSupplier(id: string, currentUser: User): Promise<Supplier> {
+  const supplier = await getSupplierRecord(id);
+  assertCanReview(supplier, currentUser);
+
+  const updated: SupplierRecord = await prisma.supplier.update({
+    where: { id },
+    data: {
+      status: SupplierStatus.APPROVED,
+      approvedBy: currentUser.id,
+      rejectedBy: null,
+      rejectionReason: null,
+    },
+  });
+
+  return toSupplier(updated);
+}
+
+export function validateRejectReason(body: RejectSupplierPayload): string {
+  return requiredString(body.reason, SupplierField.rejectionReason);
+}
+
+export async function rejectSupplier(
+  id: string,
+  reason: string,
+  currentUser: User,
+): Promise<Supplier> {
+  const supplier = await getSupplierRecord(id);
+  assertCanReview(supplier, currentUser);
+
+  const updated: SupplierRecord = await prisma.supplier.update({
+    where: { id },
+    data: {
+      status: SupplierStatus.REJECTED,
+      rejectedBy: currentUser.id,
+      rejectionReason: reason,
+      approvedBy: null,
+    },
+  });
+
+  return toSupplier(updated);
 }
