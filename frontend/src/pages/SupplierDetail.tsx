@@ -3,11 +3,14 @@
  * Submit / approve / reject shown only when valid for the active user and status.
  */
 
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { ApiError } from "../api/client";
+import { getSupplierById } from "../api/suppliers";
 import { SupplierActions } from "../components/SupplierActions";
 import { StatusBadge } from "../components/StatusBadge";
-import { APP_USERS } from "../context/UserContext";
-import { DUMMY_SUPPLIERS } from "../data/dummySuppliers";
+import { APP_USERS, useUser } from "../context/UserContext";
+import type { Supplier } from "../types";
 
 function userName(userId: string): string {
   for (const user of APP_USERS) {
@@ -20,9 +23,68 @@ function userName(userId: string): string {
 
 export function SupplierDetail() {
   const { id } = useParams();
-  const supplier = DUMMY_SUPPLIERS.find((item) => item.id === id);
+  const { user } = useUser();
+  const [supplier, setSupplier] = useState<Supplier | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
 
-  if (!supplier) {
+  useEffect(() => {
+    if (!id) {
+      setLoading(false);
+      setNotFound(true);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadSupplier() {
+      setLoading(true);
+      setError(null);
+      setNotFound(false);
+
+      try {
+        const data = await getSupplierById(user.id, id!);
+        if (!cancelled) {
+          setSupplier(data);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setSupplier(null);
+        if (err instanceof ApiError && err.status === 404) {
+          setNotFound(true);
+        } else {
+          setError(err instanceof Error ? err.message : "Could not load supplier.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadSupplier();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, user.id]);
+
+  if (loading) {
+    return <p className="text-sm text-zinc-500">Loading supplier…</p>;
+  }
+
+  if (error) {
+    return (
+      <section>
+        <p className="text-sm text-zinc-700">{error}</p>
+        <Link to="/" className="mt-4 inline-block text-sm text-zinc-500 no-underline hover:text-zinc-800">
+          Back to suppliers
+        </Link>
+      </section>
+    );
+  }
+
+  if (notFound || !supplier) {
     return (
       <section>
         <h1 className="text-xl font-semibold">Supplier not found</h1>
