@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { listSuppliers } from "../api/suppliers";
 import { SupplierTable } from "../components/SupplierTable";
 import { useUser } from "../context/UserContext";
+import { listDrafts } from "../storage/drafts";
 import type { Supplier } from "../types";
 
 export function SupplierList() {
@@ -10,6 +11,7 @@ export function SupplierList() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isRequester = user.role === "requester"; // Only Anna can open the create form.
 
   async function loadSuppliers() {
     setLoading(true);
@@ -17,9 +19,11 @@ export function SupplierList() {
 
     try {
       const data = await listSuppliers(user.id);
-      setSuppliers(data);
+      // Show this user's local drafts first, then rows from the database.
+      setSuppliers([...listDrafts(user.id), ...data]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load suppliers.");
+      setSuppliers(listDrafts(user.id)); // Keep drafts visible even if the API fails.
     } finally {
       setLoading(false);
     }
@@ -33,12 +37,15 @@ export function SupplierList() {
     <section>
       <div className="mb-6 flex items-center justify-between gap-4">
         <h1 className="text-xl font-semibold">Suppliers</h1>
-        <Link
-          to="/suppliers/new"
-          className="rounded-lg bg-zinc-900 px-3.5 py-2 text-sm font-medium text-white no-underline hover:bg-zinc-800"
-        >
-          Create supplier
-        </Link>
+        {/* Hide create for approvers; the page itself also redirects them. */}
+        {isRequester && (
+          <Link
+            to="/suppliers/new"
+            className="rounded-lg bg-zinc-900 px-3.5 py-2 text-sm font-medium text-white no-underline hover:bg-zinc-800"
+          >
+            Create supplier
+          </Link>
+        )}
       </div>
 
       {loading && <p className="text-sm text-zinc-500">Loading suppliers…</p>}
@@ -56,7 +63,7 @@ export function SupplierList() {
         </div>
       )}
 
-      {!loading && !error && <SupplierTable suppliers={suppliers} />}
+      {!loading && <SupplierTable suppliers={suppliers} />}
     </section>
   );
 }

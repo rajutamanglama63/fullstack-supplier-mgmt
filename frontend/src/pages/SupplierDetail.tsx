@@ -10,6 +10,7 @@ import { getSupplierById } from "../api/suppliers";
 import { SupplierActions } from "../components/SupplierActions";
 import { StatusBadge } from "../components/StatusBadge";
 import { APP_USERS, useUser } from "../context/UserContext";
+import { getDraftById } from "../storage/drafts";
 import type { Supplier } from "../types";
 
 function userName(userId: string): string {
@@ -42,6 +43,16 @@ export function SupplierDetail() {
       setLoading(true);
       setError(null);
       setNotFound(false);
+
+      // Drafts live only in localStorage, so check there before calling the backend.
+      const draft = getDraftById(id!);
+      if (draft) {
+        if (!cancelled) {
+          setSupplier(draft);
+          setLoading(false);
+        }
+        return;
+      }
 
       try {
         const data = await getSupplierById(user.id, id!);

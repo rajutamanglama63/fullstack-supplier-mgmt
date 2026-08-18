@@ -1,5 +1,8 @@
-import { type FormEvent } from "react";
+import { type FormEvent, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { createSupplier } from "../api/suppliers";
 import { useUser } from "../context/UserContext";
+import { removeDraft } from "../storage/drafts";
 import type { Supplier } from "../types";
 
 const fieldClass =
@@ -7,11 +10,30 @@ const fieldClass =
 
 export function SupplierActions({ supplier }: { supplier: Supplier }) {
   const { user } = useUser();
+  const navigate = useNavigate();
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const isRequester = user.role === "requester";
   const isApprover = user.role === "approver";
 
-  function handleRequest() {
-    console.log({ action: "request", id: supplier.id });
+  async function handleRequest() {
+    setError(null);
+    setSaving(true);
+
+    try {
+      await createSupplier(user.id, {
+        companyName: supplier.companyName,
+        vatId: supplier.vatId,
+        country: supplier.country,
+        contactEmail: supplier.contactEmail,
+      });
+      removeDraft(supplier.id);
+      navigate("/");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send request.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleApprove() {
@@ -27,13 +49,17 @@ export function SupplierActions({ supplier }: { supplier: Supplier }) {
 
   if (supplier.status === "DRAFT" && isRequester) {
     return (
-      <button
-        type="button"
-        onClick={handleRequest}
-        className="rounded-lg bg-zinc-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-zinc-800"
-      >
-        Request
-      </button>
+      <div className="space-y-3">
+        {error && <p className="text-sm text-red-700">{error}</p>}
+        <button
+          type="button"
+          onClick={() => void handleRequest()}
+          disabled={saving}
+          className="rounded-lg bg-zinc-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60"
+        >
+          Request
+        </button>
+      </div>
     );
   }
 
