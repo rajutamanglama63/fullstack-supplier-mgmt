@@ -153,7 +153,7 @@ export function SupplierDetail() {
           )}
         </dl>
 
-        <SupplierActions supplier={supplier} />
+        <SupplierActions supplier={supplier} onSupplierChange={setSupplier} />
       </div>
 
       <Link to="/" className="mt-4 inline-block text-sm text-zinc-500 no-underline hover:text-zinc-800">
