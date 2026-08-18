@@ -22,3 +22,20 @@ export function createSupplier(
     body: JSON.stringify(input),
   });
 }
+
+export function approveSupplier(userId: string, id: string): Promise<Supplier> {
+  return apiRequest<Supplier>(userId, `/api/suppliers/${id}/approve`, {
+    method: "POST",
+  });
+}
+
+export function rejectSupplier(
+  userId: string,
+  id: string,
+  reason: string,
+): Promise<Supplier> {
+  return apiRequest<Supplier>(userId, `/api/suppliers/${id}/reject`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}

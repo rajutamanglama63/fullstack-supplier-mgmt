@@ -1,6 +1,10 @@
 import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { createSupplier } from "../api/suppliers";
+import {
+  approveSupplier,
+  createSupplier,
+  rejectSupplier,
+} from "../api/suppliers";
 import { useUser } from "../context/UserContext";
 import { removeDraft } from "../storage/drafts";
 import type { Supplier } from "../types";
@@ -8,7 +12,13 @@ import type { Supplier } from "../types";
 const fieldClass =
   "mt-1 w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-zinc-400";
 
-export function SupplierActions({ supplier }: { supplier: Supplier }) {
+export function SupplierActions({
+  supplier,
+  onSupplierChange,
+}: {
+  supplier: Supplier;
+  onSupplierChange?: (supplier: Supplier) => void;
+}) {
   const { user } = useUser();
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
@@ -36,15 +46,36 @@ export function SupplierActions({ supplier }: { supplier: Supplier }) {
     }
   }
 
-  function handleApprove() {
-    console.log({ action: "approve", id: supplier.id });
+  async function handleApprove() {
+    setError(null);
+    setSaving(true);
+
+    try {
+      const updated = await approveSupplier(user.id, supplier.id);
+      onSupplierChange?.(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not approve supplier.");
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function handleReject(event: FormEvent<HTMLFormElement>) {
+  async function handleReject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setError(null);
     const reason = String(new FormData(event.currentTarget).get("reason") ?? "").trim();
     if (!reason) return;
-    console.log({ action: "reject", id: supplier.id, reason });
+    setSaving(true);
+
+    try {
+      const updated = await rejectSupplier(user.id, supplier.id, reason);
+      onSupplierChange?.(updated);
+      event.currentTarget.reset();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not reject supplier.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (supplier.status === "DRAFT" && isRequester) {
@@ -66,6 +97,7 @@ export function SupplierActions({ supplier }: { supplier: Supplier }) {
   if (supplier.status === "PENDING_APPROVAL" && isApprover) {
     return (
       <form onSubmit={handleReject} className="space-y-3">
+        {error && <p className="text-sm text-red-700">{error}</p>}
         <label className="block text-sm font-medium text-zinc-700">
           Rejection reason
           <textarea className={fieldClass} name="reason" rows={3} required />
@@ -73,14 +105,16 @@ export function SupplierActions({ supplier }: { supplier: Supplier }) {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={handleApprove}
-            className="rounded-lg bg-teal-700 px-3.5 py-2 text-sm font-medium text-white hover:bg-teal-800"
+            onClick={() => void handleApprove()}
+            disabled={saving}
+            className="rounded-lg bg-teal-700 px-3.5 py-2 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-60"
           >
             Approve
           </button>
           <button
             type="submit"
-            className="rounded-lg bg-red-700 px-3.5 py-2 text-sm font-medium text-white hover:bg-red-800"
+            disabled={saving}
+            className="rounded-lg bg-red-700 px-3.5 py-2 text-sm font-medium text-white hover:bg-red-800 disabled:opacity-60"
           >
             Reject
           </button>
